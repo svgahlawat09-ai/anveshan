@@ -6,3 +6,5 @@ tavily-python
 trafilatura
 httpx
 rapidfuzz
+pypdf
+python-multipart

@@ -1,123 +1,128 @@
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 
 const STAGES = [
   {
     id: "01",
-    label: "PARSING CLAIM",
-    telemetry: [
-      "tokenising claim text",
-      "assertion type detected: comparative ranking",
-      "entities extracted: India · unemployment rate · developing countries",
-    ],
+    label: "PARSING & DECOMPOSING",
+    keywords: ["starting", "breaking", "decomposing", "parsing", "cached"],
+    description: "Detecting language, isolating factual assertion, and decomposing into subclaims",
   },
   {
     id: "02",
-    label: "DECOMPOSING SUBCLAIMS",
-    telemetry: [
-      "splitting claim into independently verifiable subclaims",
-      "mapping logical dependencies between subclaims",
-      "flagging implicit assumptions: dataset · definition · period",
-    ],
+    label: "DISCOVERING SOURCES",
+    keywords: ["searching", "discovering", "querying"],
+    description: "Searching primary, official, opposing and corroborating sources",
   },
   {
     id: "03",
-    label: "DISCOVERING SOURCES",
-    telemetry: [
-      "querying official statistics portals",
-      "retrieving research literature and original publications",
-      "screening 14 candidate sources for traceability",
-    ],
+    label: "READING DOCUMENTS",
+    keywords: ["reading", "retrieving", "fetching"],
+    description: "Extracting complete text content and screening candidates",
   },
   {
     id: "04",
-    label: "EVALUATING EVIDENCE",
-    telemetry: [
-      "classifying stance per subclaim",
-      "comparing measurement definitions across systems",
-      "isolating conflicting estimates and period mismatches",
-    ],
+    label: "EXTRACTING & VERIFYING PASSAGES",
+    keywords: ["extracting", "verifying", "quotes"],
+    description: "Checking verbatim character matches and verifying quote integrity",
   },
   {
     id: "05",
-    label: "COMPILING REPORT",
-    telemetry: [
-      "drafting executive summary",
-      "formatting source bibliography",
-      "finalising transparent assessment labels",
-    ],
+    label: "INDEPENDENCE & ASSESSMENT",
+    keywords: ["independent", "weighing", "compiling", "evaluating"],
+    description: "Detecting syndicated cross-dependencies and compiling final dossier",
   },
 ];
 
-const STAGE_MS = 1500;
+interface ProgressTrackerProps {
+  currentStep?: string;
+  onComplete?: () => void;
+}
 
 export default function ProgressTracker({
+  currentStep = "Initiating investigation…",
   onComplete,
-}: {
-  onComplete: () => void;
-}) {
-  const [active, setActive] = useState(0);
-  const [tick, setTick] = useState(0);
+}: ProgressTrackerProps) {
+  const [activeStage, setActiveStage] = useState(0);
 
   useEffect(() => {
-    if (active >= STAGES.length) {
-      const t = setTimeout(onComplete, 800);
-      return () => clearTimeout(t);
+    const stepLower = currentStep.toLowerCase();
+    const stageIndex = STAGES.findIndex((s) =>
+      s.keywords.some((kw) => stepLower.includes(kw))
+    );
+    if (stageIndex >= 0) {
+      setActiveStage(stageIndex);
     }
-    const telemetryTimer = setInterval(() => setTick((v) => v + 1), 420);
-    const stageTimer = setTimeout(() => {
-      setTick(0);
-      setActive((a) => a + 1);
-    }, STAGE_MS);
-    return () => {
-      clearInterval(telemetryTimer);
-      clearTimeout(stageTimer);
-    };
-  }, [active, onComplete]);
+  }, [currentStep]);
 
-  const progress = Math.min((active / STAGES.length) * 100, 100);
-  const stage = STAGES[Math.min(active, STAGES.length - 1)];
+  const progressPercent = Math.min(
+    Math.max(((activeStage + 1) / STAGES.length) * 100, 20),
+    100
+  );
 
   return (
     <div
-      className="mx-auto max-w-2xl rounded-sm border border-[#D8CDB0] bg-white p-6 sm:p-8"
+      className="mx-auto max-w-2xl rounded-sm border border-[#D8CDB0] bg-white p-6 sm:p-8 shadow-sm"
       data-testid="investigation-progress"
     >
       <div className="flex items-baseline justify-between">
         <h2 className="font-heading text-2xl font-semibold tracking-tight text-[#292522]">
-          Investigating
+          Investigating Claim
         </h2>
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8D2939]">
-          Demonstration run
+        <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#8D2939]">
+          <Loader2 className="h-3 w-3 animate-spin" /> Live Pipeline
         </span>
       </div>
+
       <p className="mt-1 text-sm text-[#5C544E]">
-        Following the evidence through five investigation stages.
+        Verifying assertions through open-web retrieval, primary sources, and cross-source evaluation.
       </p>
 
+      {/* Progress bar */}
       <div
-        className="mt-5 h-1 w-full overflow-hidden rounded-full bg-[#EFE8CC]"
+        className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-[#EFE8CC]"
         role="progressbar"
-        aria-valuenow={Math.round(progress)}
+        aria-valuenow={Math.round(progressPercent)}
         aria-valuemin={0}
         aria-valuemax={100}
         data-testid="investigation-progress-bar"
       >
         <div
-          className="h-full bg-[#8D2939] transition-[width] duration-500 ease-out"
-          style={{ width: `${progress}%` }}
+          className="h-full bg-[#8D2939] transition-all duration-700 ease-out"
+          style={{ width: `${progressPercent}%` }}
         />
       </div>
 
-      <ol className="mt-6 space-y-1" role="list" data-testid="investigation-stage-list">
+      {/* Current Step Banner */}
+      <div className="mt-6 flex items-center gap-3 rounded-sm border border-[#D8CDB0] bg-[#FDFBF3] px-4 py-3">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#8D2939] opacity-75" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#8D2939]" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#8D2939]">
+            Active Step
+          </p>
+          <p className="mt-0.5 truncate font-mono text-sm font-medium text-[#292522]" data-testid="current-step-display">
+            {currentStep}
+          </p>
+        </div>
+      </div>
+
+      {/* Stages list */}
+      <ol className="mt-6 space-y-2" role="list" data-testid="investigation-stage-list">
         {STAGES.map((s, i) => {
-          const done = i < active;
-          const isActive = i === active;
+          const done = i < activeStage;
+          const isActive = i === activeStage;
           return (
             <li
               key={s.id}
-              className={`flex items-start gap-3 rounded-sm px-3 py-2.5 transition-colors duration-300 ${
-                isActive ? "bg-[#EFE8CC]" : done ? "" : "opacity-45"
+              className={`flex items-start gap-3 rounded-sm px-3.5 py-2.5 transition-colors duration-300 ${
+                isActive
+                  ? "border border-[#D8CDB0] bg-[#EFE8CC]/70"
+                  : done
+                    ? "opacity-90"
+                    : "opacity-45"
               }`}
               aria-current={isActive ? "step" : undefined}
               data-testid={`investigation-stage-${s.id}`}
@@ -135,32 +140,23 @@ export default function ProgressTracker({
               </span>
               <div className="min-w-0 flex-1">
                 <p
-                  className={`font-mono text-xs uppercase tracking-[0.18em] ${
+                  className={`font-mono text-xs uppercase tracking-[0.16em] font-medium ${
                     isActive ? "text-[#8D2939]" : "text-[#292522]"
                   }`}
                 >
                   {s.id} — {s.label}
                 </p>
-                {isActive && (
-                  <p className="mt-1 truncate font-mono text-[10px] tracking-[0.04em] text-[#5C544E]">
-                    {'>'} {s.telemetry[tick % s.telemetry.length]}
-                  </p>
-                )}
+                <p className="mt-0.5 text-xs text-[#5C544E]">
+                  {s.description}
+                </p>
               </div>
-              {isActive && (
-                <span
-                  aria-hidden
-                  className="mt-1.5 h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-[#F39291]"
-                />
-              )}
             </li>
           );
         })}
       </ol>
 
       <p className="mt-6 border-t border-[#EFE8CC] pt-4 font-mono text-[10px] leading-relaxed tracking-[0.06em] text-[#6A625A]">
-        PROTOTYPE NOTE — this sequence is a simulated demonstration. A live
-        investigation would stream real source discovery and evaluation telemetry.
+        Investigations check official sources, research publications, and press archives. Results stream directly from the analysis engine.
       </p>
     </div>
   );

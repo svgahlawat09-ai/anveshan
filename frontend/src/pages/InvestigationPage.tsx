@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, FileText, Link2, Type, Upload } from "lucide-react";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EXAMPLE_CLAIMS } from "@/data/demoInvestigation";
 import { addHistoryEntry } from "@/lib/storage";
+import { investigateText, investigateUrl, investigatePdf } from "@/services/api";
 
 type Mode = "text" | "url" | "document";
 
@@ -33,6 +34,7 @@ export default function InvestigationPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [running, setRunning] = useState(false);
+  const [currentStep, setCurrentStep] = useState("Ready");
 
   const urlValid = url.trim() === "" || URL_RE.test(url.trim());
   const canRun = useMemo(() => {
@@ -41,40 +43,76 @@ export default function InvestigationPage() {
     return file !== null;
   }, [mode, claim, url, file]);
 
-  const complete = useCallback(() => {
-    const subject =
-      mode === "text"
-        ? claim.trim()
-        : mode === "url"
-          ? url.trim()
-          : (file?.name ?? "Uploaded document");
-    addHistoryEntry({
-      id: crypto.randomUUID(),
-      claim: subject,
-      mode,
-      date: new Date().toISOString(),
-    });
-    navigate("/results");
-  }, [mode, claim, url, file, navigate]);
-
-  const onInvestigate = () => {
+  const onInvestigate = async () => {
     if (!canRun) {
       toast.error(
         mode === "text"
           ? "Enter a claim of at least 10 characters."
           : mode === "url"
             ? "Enter a valid http(s) URL."
-            : "Attach a PDF document first.",
+            : "Attach a PDF document first."
       );
       return;
     }
-    setRunning(true);
+
+    try {
+      setRunning(true);
+      setCurrentStep("Initializing investigation…");
+
+      let report;
+      let subject = "";
+
+      if (mode === "text") {
+        subject = claim.trim();
+        report = await investigateText(claim, (step) => setCurrentStep(step));
+      } else if (mode === "url") {
+        subject = url.trim();
+        report = await investigateUrl(url.trim(), (step) => setCurrentStep(step));
+      } else {
+        if (!file) {
+          throw new Error("No PDF file selected.");
+        }
+        subject = file.name;
+        report = await investigatePdf(file, (step) => setCurrentStep(step));
+      }
+
+      const investigation = {
+        id: crypto.randomUUID(),
+        claim: subject,
+        mode,
+        report,
+        date: new Date().toISOString(),
+      };
+
+      sessionStorage.setItem(
+        "anveshan_current_investigation",
+        JSON.stringify(investigation)
+      );
+
+      addHistoryEntry({
+        id: investigation.id,
+        claim: subject,
+        mode,
+        date: investigation.date,
+      });
+
+      navigate("/results");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Investigation failed."
+      );
+      setRunning(false);
+    }
   };
 
   const acceptFile = (f: File | null) => {
     if (!f) return;
     if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Demonstration upload accepts PDF files only.");
+      toast.error("Please upload a PDF file.");
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("PDF exceeds 10 MB limit.");
       return;
     }
     setFile(f);
@@ -84,7 +122,7 @@ export default function InvestigationPage() {
     return (
       <WorkspaceLayout>
         <div className="px-4 py-16 sm:px-6 lg:px-8">
-          <ProgressTracker onComplete={complete} />
+          <ProgressTracker currentStep={currentStep} />
         </div>
       </WorkspaceLayout>
     );
@@ -103,10 +141,10 @@ export default function InvestigationPage() {
           Start an investigation.
         </h1>
         <p className="mt-3 text-lg text-[#5C544E]">
-          Enter a claim. We'll follow the evidence.
+          Enter a claim in English, Hindi or Hinglish. We'll follow the evidence.
         </p>
 
-        <div className="mt-8 rounded-sm border border-[#D8CDB0] bg-white p-5 sm:p-7">
+        <div className="mt-8 rounded-sm border border-[#D8CDB0] bg-white p-5 sm:p-7 shadow-sm">
           <Tabs
             value={mode}
             onValueChange={(v) => setMode(v as Mode)}
@@ -136,13 +174,13 @@ export default function InvestigationPage() {
                 value={claim}
                 onChange={(e) => setClaim(e.target.value)}
                 rows={5}
-                maxLength={600}
+                maxLength={1000}
                 data-testid="claim-text-input"
-                placeholder='e.g. "India has the highest unemployment rate among all developing countries."'
+                placeholder='e.g. "India has the highest unemployment rate among all developing countries." or "5G causes cancer" or "भारत में बेरोजगारी बढ़ रही है"'
                 className="mt-2 resize-y border-[#D8CDB0] bg-[#FDFBF3] leading-relaxed"
               />
               <p className="mt-1.5 text-right font-mono text-[10px] text-[#6A625A]">
-                {claim.length}/600
+                {claim.length}/1000
               </p>
             </TabsContent>
 
@@ -167,8 +205,7 @@ export default function InvestigationPage() {
                   className="mt-2 font-mono text-[11px] text-[#8B302B]"
                   data-testid="url-input-error"
                 >
-                  Enter a full URL including http(s):// — the claim will be
-                  extracted from the page.
+                  Enter a full URL including http(s):// — claims will be extracted from the page.
                 </p>
               )}
             </TabsContent>
@@ -210,7 +247,7 @@ export default function InvestigationPage() {
                   onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
                 />
                 <p className="mt-3 font-mono text-[10px] tracking-[0.08em] text-[#6A625A]">
-                  PDF only · frontend demonstration, nothing is uploaded
+                  PDF documents up to 10 MB · Text is extracted and factual assertions investigated
                 </p>
               </div>
               {file && (
@@ -265,7 +302,7 @@ export default function InvestigationPage() {
             onClick={onInvestigate}
             disabled={!canRun}
             data-testid="investigate-claim-button"
-            className="mt-7 inline-flex w-full items-center justify-center gap-2.5 rounded-sm bg-[#8D2939] px-6 py-3.5 font-mono text-sm font-medium uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#741F2D] disabled:cursor-not-allowed disabled:opacity-45"
+            className="mt-7 inline-flex w-full items-center justify-center gap-2.5 rounded-sm bg-[#8D2939] px-6 py-3.5 font-mono text-sm font-medium uppercase tracking-[0.18em] text-white transition-colors hover:bg-[#741F2D] disabled:cursor-not-allowed disabled:opacity-45 shadow-sm"
           >
             Investigate Claim
             <ArrowRight className="h-4 w-4" />
@@ -283,11 +320,6 @@ export default function InvestigationPage() {
             </p>
           )}
         </div>
-
-        <p className="mt-6 text-center font-mono text-[10px] leading-relaxed tracking-[0.08em] text-[#6A625A]">
-          PROTOTYPE — investigations run against a fixed demonstration dataset.
-          A live deployment would query real sources here.
-        </p>
       </div>
     </WorkspaceLayout>
   );
