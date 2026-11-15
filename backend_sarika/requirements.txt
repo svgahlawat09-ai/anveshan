@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-dotenv
+google-genai
+tavily-python
+trafilatura
+httpx
+rapidfuzz

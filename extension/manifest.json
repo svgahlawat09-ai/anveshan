@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Anveshan",
+  "version": "0.1.0",
+  "description": "Select a claim. See the evidence.",
+  "permissions": ["contextMenus", "activeTab"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "commands": {
+    "investigate-selection": {
+      "suggested_key": { "default": "Ctrl+Shift+P" },
+      "description": "Investigate selected text"
+    }
+  }
+}
